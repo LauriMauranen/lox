@@ -33,6 +33,7 @@ class Scanner {
     keywords.put("true", TRUE);
     keywords.put("var", VAR);
     keywords.put("while", WHILE);
+    keywords.put("break", BREAK);
   }
 
   Scanner(String source) {
@@ -67,6 +68,8 @@ class Scanner {
       case '+': addToken(PLUS); break;
       case ';': addToken(SEMICOLON); break;
       case '*': addToken(STAR); break;
+      case '?': addToken(QUESTION_MARK); break;
+      case ':': addToken(DOUBLE_DOT); break;
 
       case '!':
         addToken(match('=') ? BANG_EQUAL : BANG);
