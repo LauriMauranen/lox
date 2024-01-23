@@ -25,11 +25,6 @@ void writeChunk(Chunk* chunk, uint8_t byte, int line) {
 
     const int linesCount = chunk->linesCount;
     if (line > linesCount) {
-        /* if (line != linesCount + 1) { */
-        /*     printf("Expected line: %d, got %d\n", */
-        /*         linesCount + 1, line); */
-        /* } */
-
         chunk->lines = GROW_ARRAY(int, chunk->lines,
             linesCount * 2, (linesCount + 1) * 2);
 
