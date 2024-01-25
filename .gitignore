@@ -1,2 +1,4 @@
 target
 testi.lox
+*.swp
+*.swo

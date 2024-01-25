@@ -6,10 +6,10 @@
 void disassembleChunk(Chunk* chunk, const char* name) {
     printf("== %s ==\n", name);
 
-    for (int i = 0; i < chunk->linesCount; i++) {
-        printf("count: %d line: %d\n",
-            chunk->lines[i * 2], chunk->lines[i * 2 + 1]);
-    }
+    /* for (int i = 0; i < chunk->linesCount; i++) { */
+    /*     printf("count: %d line: %d\n", */
+    /*         chunk->linesChunk[i], chunk->lines[i]); */
+    /* } */
 
     for (int offset = 0; offset < chunk->count;) {
         offset = disassembleInstruction(chunk, offset);
@@ -18,8 +18,8 @@ void disassembleChunk(Chunk* chunk, const char* name) {
 
 static int getLine(Chunk* chunk, int offset) {
     for (int i = 0; i < chunk->count; i++) {
-        if (chunk->lines[i * 2] >= offset) {
-            return chunk->lines[i * 2 + 1];
+        if (chunk->linesChunk[i] >= offset) {
+            return chunk->lines[i];
         }
     }
     return -1;
@@ -62,6 +62,16 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return simpleInstruction("OP_RETURN", offset);
         case OP_CONSTANT:
             return constantInstruction("OP_CONSTANT", chunk, offset);
+        case OP_NEGATE:
+            return simpleInstruction("OP_NEGATE", offset);
+        case OP_ADD:
+            return simpleInstruction("OP_ADD", offset);
+        case OP_SUBSTRACT:
+            return simpleInstruction("OP_SUBSTRACT", offset);
+        case OP_MULTIPLY:
+            return simpleInstruction("OP_MULTIPLY", offset);
+        case OP_DIVIDE:
+            return simpleInstruction("OP_DIVIDE", offset);
         default:
             printf("Unknown opcode %d\n", instruction);
             return offset + 1;
