@@ -206,5 +206,6 @@ Token scanToken() {
     case '"': return string();
   }
 
+  /* printf("%c", c); */
   return errorToken("Unexpected character.");
 }

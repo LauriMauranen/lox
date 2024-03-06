@@ -8,8 +8,7 @@ static void freeObject(Obj* obj) {
   switch(obj->type) {
     case OBJ_STRING: {
       ObjString* str = (ObjString*)obj;
-      FREE_ARRAY(char, str->chars, str->length + 1);
-      FREE(ObjString, str);
+      FREE_OBJ_STRING(str);
       break;
     }
   }

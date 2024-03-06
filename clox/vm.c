@@ -8,6 +8,7 @@
 #include "memory.h"
 #include "compiler.h"
 #include "object.h"
+#include "table.h"
 
 VM vm;
 
@@ -47,39 +48,9 @@ static void concatenate() {
   memcpy(chars + a->length, b->chars, b->length);
   chars[length] = '\0';
 
-  ObjString* result = takeString(chars, length);
+  ObjString* result = copyString(chars, length);
+  FREE_ARRAY(char, chars, length + 1);
   push(OBJ_VAL(result));
-}
-
-void initVM() {
-  resetStack();
-  vm.objects = NULL;
-}
-
-void freeVM() {
-  FREE_ARRAY(Value, vm.stack, vm.stackCapasity);
-  freeObjects();
-}
-
-void push(Value value) {
-#define STACK_SIZE_INC 256
-  if (vm.stackSize >= vm.stackCapasity) {
-    int oldCapacity = vm.stackCapasity;
-    vm.stackCapasity = vm.stackCapasity + STACK_SIZE_INC;
-    vm.stack = GROW_ARRAY(Value, vm.stack, oldCapacity, vm.stackCapasity);
-  }
-  /* *vm.stackTop = value; */
-  /* vm.stackTop++; */
-  vm.stack[vm.stackSize] = value;
-  vm.stackSize++;
-#undef STACK_SIZE_INC
-}
-
-Value pop() {
-    /* vm.stackTop--; */
-    /* return *vm.stackTop; */
-    vm.stackSize--;
-    return vm.stack[vm.stackSize];
 }
 
 static InterpretResult run() {
@@ -117,14 +88,33 @@ static InterpretResult run() {
         uint8_t instruction;
         switch (instruction = READ_BYTE()) {
             case OP_RETURN: {
-                printValue(pop());
-                printf("\n");
                 return INTERPRET_OK;
             }
             case OP_CONSTANT: {
                 Value constant = READ_CONSTANT();
                 push(constant);
                 break;
+            }
+            case OP_PRINT: {
+              printValue(pop());
+              printf("\n");
+              break;
+            }
+            case OP_POP: pop(); break;
+            case OP_DEFINE_GLOBAL: {
+              Value name = READ_CONSTANT();
+              tableSet(&vm.globals, &name, pop());
+              break;
+            }
+            case OP_GET_GLOBAL: {
+              Value name = READ_CONSTANT();
+              Value value;
+              if (!tableGet(&vm.globals, &name, &value)) {
+                runtimeError("Undefined variable. '%s'.", AS_CSTRING(name));
+                return INTERPRET_RUNTIME_ERROR;
+              }
+              push(value);
+              break;
             }
             case OP_NEGATE:
               if (!IS_NUMBER(peek(0))) {
@@ -170,6 +160,42 @@ static InterpretResult run() {
 #undef READ_CONSTANT
 #undef BINARY_OP
 }
+
+void initVM() {
+  resetStack();
+  vm.objects = NULL;
+  initTable(&vm.strings);
+  initTable(&vm.globals);
+}
+
+void freeVM() {
+  FREE_ARRAY(Value, vm.stack, vm.stackCapasity);
+  freeTable(&vm.strings);
+  freeTable(&vm.globals);
+  freeObjects();
+}
+
+void push(Value value) {
+#define STACK_SIZE_INC 256
+  if (vm.stackSize >= vm.stackCapasity) {
+    int oldCapacity = vm.stackCapasity;
+    vm.stackCapasity = vm.stackCapasity + STACK_SIZE_INC;
+    vm.stack = GROW_ARRAY(Value, vm.stack, oldCapacity, vm.stackCapasity);
+  }
+  /* *vm.stackTop = value; */
+  /* vm.stackTop++; */
+  vm.stack[vm.stackSize] = value;
+  vm.stackSize++;
+#undef STACK_SIZE_INC
+}
+
+Value pop() {
+    /* vm.stackTop--; */
+    /* return *vm.stackTop; */
+    vm.stackSize--;
+    return vm.stack[vm.stackSize];
+}
+
 
 InterpretResult interpret(char* source) {
   Chunk chunk;
