@@ -2,23 +2,21 @@
 
 #include "debug.h"
 #include "value.h"
+#include "vm.h"
+
 
 void disassembleChunk(Chunk* chunk, const char* name) {
-    printf("== %s ==\n", name);
+  printf("== %s ==\n", name);
 
-    /* for (int i = 0; i < chunk->linesCount; i++) { */
-    /*     printf("count: %d line: %d\n", */
-    /*         chunk->linesChunk[i], chunk->lines[i]); */
-    /* } */
-
-    for (int offset = 0; offset < chunk->count;) {
-        offset = disassembleInstruction(chunk, offset);
-    }
+  int previousLine = 0;
+  for (int offset = 0; offset < chunk->count;) {
+    offset = disassembleInstruction(chunk, offset, &previousLine);
+  }
 }
 
 static int simpleInstruction(const char* name, int offset) {
-    printf("%s\n", name);
-    return offset + 1;
+  printf("%s\n", name);
+  return offset + 1;
 }
 
 static int constantInstruction(const char* name, Chunk* chunk, int offset) {
@@ -29,37 +27,44 @@ static int constantInstruction(const char* name, Chunk* chunk, int offset) {
     return offset + 2;
 }
 
-int getLine(Chunk* chunk, int offset) {
-    for (int i = 0; i < chunk->count; i++) {
-        if (chunk->linesChunk[i] >= offset) {
-            return chunk->lines[i];
-        }
-    }
-    return -1;
+static int byteInstruction(const char* name, Chunk* chunk, int offset) {
+  uint8_t slot = chunk->code[offset + 1];
+  printf("%-16s %4d\n", name, slot);
+  return offset + 2;
 }
 
-int disassembleInstruction(Chunk* chunk, int offset) {
+static int jumpInstruction(const char* name, int sign, Chunk* chunk, int offset) {
+  uint16_t jump = chunk->code[offset + 1] << 8;
+  jump |= chunk->code[offset + 2];
+  printf("%-16s %4d -> %d\n", name, offset, offset + 3 + sign * jump);
+  return offset + 3;
+}
+
+// toivotaan että tämä toimii
+int getLine(Chunk* chunk, int offset) {
+  for (int i = 0; i < chunk->lines.count; i++) {
+    if (chunk->lines.offsets[i] > offset) {
+      return chunk->lines.lines[i - 1];
+    }
+  }
+  return -1;
+}
+
+int disassembleInstruction(Chunk* chunk, int offset, int* previousLine) {
     printf("%04d ", offset);
 
     int currentLine = getLine(chunk, offset);
-    int previousLine = getLine(chunk, offset - 1);
-    if (offset > 0 && currentLine == previousLine) {
-        printf("    | ");
-    } else {
+    if (currentLine > *previousLine) {
+        *previousLine = currentLine;
         printf("%4d ", currentLine);
+    } else {
+        printf("    | ");
     }
-
-    /* if (offset > 0 && */
-    /*         chunk->lines[offset] == chunk->lines[offset - 1]) { */
-    /*     printf("    | "); */
-    /* } else { */
-    /*     printf("%4d ", chunk->lines[offset]); */
-    /* } */
 
     uint8_t instruction = chunk->code[offset];
     switch(instruction) {
         case OP_RETURN:
-            return simpleInstruction("OP_RETURN", offset);
+            return byteInstruction("OP_RETURN", chunk, offset);
         case OP_CONSTANT:
             return constantInstruction("OP_CONSTANT", chunk, offset);
         case OP_PRINT:
@@ -67,9 +72,23 @@ int disassembleInstruction(Chunk* chunk, int offset) {
         case OP_POP:
           return simpleInstruction("OP_POP", offset);
         case OP_DEFINE_GLOBAL:
-          return constantInstruction("OP_DEFINE_GLOBAL",  chunk, offset);
+          return constantInstruction("OP_DEFINE_GLOBAL", chunk, offset);
         case OP_GET_GLOBAL:
-          return constantInstruction("OP_GET_GLOBAL",  chunk, offset);
+          return constantInstruction("OP_GET_GLOBAL", chunk, offset);
+        case OP_SET_GLOBAL:
+          return constantInstruction("OP_SET_GLOBAL", chunk, offset);
+        case OP_GET_LOCAL:
+          return byteInstruction("OP_GET_LOCAL", chunk, offset);
+        case OP_SET_LOCAL:
+          return byteInstruction("OP_SET_LOCAL", chunk, offset);
+        case OP_JUMP:
+          return jumpInstruction("OP_JUMP", 1, chunk, offset);
+        case OP_JUMP_IF_FALSE:
+          return jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
+        case OP_LOOP:
+          return jumpInstruction("OP_LOOP", -1, chunk, offset);
+        case OP_CALL:
+          return simpleInstruction("OP_CALL", offset);
         case OP_NEGATE:
             return simpleInstruction("OP_NEGATE", offset);
         case OP_ADD:

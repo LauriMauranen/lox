@@ -13,9 +13,10 @@
 VM vm;
 
 static void resetStack() {
-  /* vm.stackTop = vm.stack; */
+  FREE_ARRAY(Value, vm.stack, vm.stackCapasity);
   vm.stackSize = 0;
   vm.stackCapasity = 0;
+  vm.frameCount = 0;
 }
 
 static void runtimeError(const char* format, ...) {
@@ -25,8 +26,9 @@ static void runtimeError(const char* format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  size_t instruction = vm.ip - vm.chunk->code - 1;
-  int line = getLine(vm.chunk, instruction);
+  CallFrame* frame = &vm.frames[vm.frameCount - 1];
+  size_t instruction = frame->ip - frame->function->chunk.code - 1;
+  int line = getLine(&frame->function->chunk, instruction);
   fprintf(stderr, "[line %d] in script\n", line);
   resetStack();
 }
@@ -54,8 +56,17 @@ static void concatenate() {
 }
 
 static InterpretResult run() {
-#define READ_BYTE() (*vm.ip++)
-#define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+  CallFrame* frame = &vm.frames[vm.frameCount - 1];
+
+#define READ_BYTE() (*frame->ip++)
+
+#define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
+
+#define READ_STRING() AS_STRING(READ_CONSTANT())
+
+#define READ_SHORT() \
+  (frame->ip += 2, (uint16_t)((frame->ip[-2] << 8 | frame->ip[-1])))
+
 #define BINARY_OP(valueType, op) \
   do { \
     if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
@@ -67,28 +78,36 @@ static InterpretResult run() {
     push(valueType(a op b)); \
   } while(false)
 
-    for(;;) {
 #ifdef DEBUG_TRACE_EXECUTION
-    printf("        ");
-    /* for (Value* slot = vm.stack; slot < vm.stackTop; slot++) { */
-    /*   printf("[ "); */
-    /*   printValue(*slot); */
-    /*   printf(" ]"); */
-    /* } */
-    for (int i = 0; i < vm.stackSize; i++) {
-      printf("[ ");
-      printValue(vm.stack[i]);
-      printf(" ]");
-    }
-    printf("\n");
-    disassembleInstruction(vm.chunk,
-        (int)(vm.ip - vm.chunk->code));
+    int previousLine = 0;
+#endif
+
+    for(;;) {
+
+#ifdef DEBUG_TRACE_EXECUTION
+      printf("        ");
+      for (int i = 0; i < vm.stackSize; i++) {
+        printf("[ ");
+        printValue(vm.stack[i]);
+        printf(" ]");
+      }
+      printf("\n");
+      disassembleInstruction(&frame->function->chunk,
+          (int)(frame->ip - frame->function->chunk.code), &previousLine);
 #endif
 
         uint8_t instruction;
         switch (instruction = READ_BYTE()) {
             case OP_RETURN: {
-                return INTERPRET_OK;
+              if (vm.frameCount == 1) return INTERPRET_OK;
+              Value value = pop();
+              uint8_t nLocals = READ_BYTE();
+              // ehkei paras paikka muokata paljon pinoa
+              while (nLocals--) pop();
+              push(value); // return value
+              vm.frameCount--;
+              frame = &vm.frames[vm.frameCount - 1];
+              break;
             }
             case OP_CONSTANT: {
                 Value constant = READ_CONSTANT();
@@ -102,18 +121,83 @@ static InterpretResult run() {
             }
             case OP_POP: pop(); break;
             case OP_DEFINE_GLOBAL: {
-              Value name = READ_CONSTANT();
-              tableSet(&vm.globals, &name, pop());
+              ObjString* name = READ_STRING();
+              tableSet(&vm.globals, name, pop());
               break;
             }
             case OP_GET_GLOBAL: {
-              Value name = READ_CONSTANT();
+              ObjString* name = READ_STRING();
               Value value;
-              if (!tableGet(&vm.globals, &name, &value)) {
-                runtimeError("Undefined variable. '%s'.", AS_CSTRING(name));
+              if (!tableGet(&vm.globals, name, &value)) {
+                runtimeError("Undefined variable. '%s'.", name->chars);
                 return INTERPRET_RUNTIME_ERROR;
               }
               push(value);
+              break;
+            }
+            case OP_SET_GLOBAL: {
+              ObjString* name = READ_STRING();
+              if (tableSet(&vm.globals, name, peek(0))) {
+                tableDelete(&vm.globals, name);
+                runtimeError("Undefined variable. '%s'.", name->chars);
+                return INTERPRET_RUNTIME_ERROR;
+              }
+              break;
+            }
+            case OP_GET_LOCAL: {
+              uint8_t slot = READ_BYTE();
+              push(vm.stack[slot + frame->slot]);
+              break;
+            }
+            case OP_SET_LOCAL: {
+              uint8_t slot = READ_BYTE();
+              vm.stack[slot + frame->slot] = peek(0);
+              /* printf("stack[%d]: ", slot + frame->slot); */
+              /* printValue(vm.stack[slot + frame->slot]); */
+              /* printf("\n"); */
+              break;
+            }
+            case OP_JUMP_IF_FALSE: {
+              uint16_t offset = READ_SHORT();
+              if (isFalsey(peek(0))) frame->ip += offset;
+              break;
+            }
+            case OP_JUMP: {
+              uint16_t offset = READ_SHORT();
+              frame->ip += offset;
+              break;
+            }
+            case OP_LOOP: {
+              uint16_t offset = READ_SHORT();
+              frame->ip -= offset;
+              break;
+            }
+            case OP_CALL: {
+              uint8_t nArgs = READ_BYTE();
+              frame = &vm.frames[vm.frameCount++];
+              frame->function = AS_FUNCTION(pop());
+              frame->ip = frame->function->chunk.code;
+
+              int arity = frame->function->arity;
+              if (nArgs != arity) {
+                runtimeError("Function called with wrong number of arguments.");
+                return INTERPRET_RUNTIME_ERROR;
+              }
+              frame->slot = vm.stackSize - 1 - arity; // onko näin?
+              Value arguments[arity];
+
+              // argumentit pinosta
+              for (int i = 0; i < arity; i++) {
+                arguments[i] = pop();
+              }
+              // argumentit muuttujiksi
+              for (int i = 0; i < arity; i++) {
+                push(NIL_VAL);
+              }
+              // argumentit takaisin pinoon
+              for (int i = arity - 1; i >= 0; i--) {
+                push(arguments[i]);
+              }
               break;
             }
             case OP_NEGATE:
@@ -159,6 +243,7 @@ static InterpretResult run() {
 #undef READ_BYTE
 #undef READ_CONSTANT
 #undef BINARY_OP
+#undef READ_SHORT
 }
 
 void initVM() {
@@ -169,7 +254,7 @@ void initVM() {
 }
 
 void freeVM() {
-  FREE_ARRAY(Value, vm.stack, vm.stackCapasity);
+  resetStack();
   freeTable(&vm.strings);
   freeTable(&vm.globals);
   freeObjects();
@@ -182,8 +267,6 @@ void push(Value value) {
     vm.stackCapasity = vm.stackCapasity + STACK_SIZE_INC;
     vm.stack = GROW_ARRAY(Value, vm.stack, oldCapacity, vm.stackCapasity);
   }
-  /* *vm.stackTop = value; */
-  /* vm.stackTop++; */
   vm.stack[vm.stackSize] = value;
   vm.stackSize++;
 #undef STACK_SIZE_INC
@@ -198,18 +281,14 @@ Value pop() {
 
 
 InterpretResult interpret(char* source) {
-  Chunk chunk;
-  initChunk(&chunk);
+  ObjFunction* function = compile(source);
+  if (function == NULL) return INTERPRET_COMPILE_ERROR;
 
-  if (!compile(source, &chunk)) {
-    freeChunk(&chunk);
-    return INTERPRET_COMPILE_ERROR;
-  }
+  push(OBJ_VAL(function));
+  CallFrame* frame = &vm.frames[vm.frameCount++];
+  frame->function = function;
+  frame->ip = function->chunk.code;
+  frame->slot = vm.stackSize - 1; // onko varma?
 
-  vm.chunk = &chunk;
-  vm.ip = vm.chunk->code;
-
-  InterpretResult result = run();
-  freeChunk(&chunk);
-  return result;
+  return run();
 }

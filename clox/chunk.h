@@ -4,6 +4,9 @@
 #include "common.h"
 #include "value.h"
 
+#define str(x) #x
+#define ENUM(e) str(e)
+
 typedef enum {
     OP_CONSTANT,
     OP_NIL,
@@ -22,17 +25,29 @@ typedef enum {
     OP_POP,
     OP_DEFINE_GLOBAL,
     OP_GET_GLOBAL,
+    OP_SET_GLOBAL,
+    OP_GET_LOCAL,
+    OP_SET_LOCAL,
+    OP_JUMP_IF_FALSE,
+    OP_JUMP,
+    OP_LOOP,
+    OP_CALL,
     OP_RETURN,
 } OpCode;
+
+typedef struct {
+  int* lines;
+  int* offsets;
+  int count;
+  int capacity;
+} Lines;
 
 typedef struct {
     int count;
     int capacity;
     uint8_t* code;
-    int* lines;
-    int linesCount;
-    int* linesChunk;
     ValueArray constants;
+    Lines lines;
 } Chunk;
 
 void initChunk(Chunk* chunk);

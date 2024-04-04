@@ -51,28 +51,28 @@ void printValue(Value value) {
   }
 }
 
-static uint32_t hashStringValue(Value value) {
-  ObjString* str = (ObjString*)AS_OBJ(value);
-  return hashString(str->chars, str->length);
-}
+/* static uint32_t hashStringValue(Value value) { */
+/*   ObjString* str = (ObjString*)AS_OBJ(value); */
+/*   return hashString(str->chars, str->length); */
+/* } */
 
-static uint32_t hashNumber(Value value) {
-  int size = 10;
-  char str[size];
-  snprintf(str, size, "%f", AS_NUMBER(value));
-  return hashString(str, strlen(str));
-}
+/* static uint32_t hashNumber(Value value) { */
+/*   int size = 10; */
+/*   char str[size]; */
+/*   snprintf(str, size, "%f", AS_NUMBER(value)); */
+/*   return hashString(str, strlen(str)); */
+/* } */
 
-static uint32_t hashBoolean(Value value) {
-  if (AS_BOOL(value)) return 1;
-  return 0;
-}
+/* static uint32_t hashBoolean(Value value) { */
+/*   if (AS_BOOL(value)) return 1; */
+/*   return 0; */
+/* } */
 
-uint32_t hashValue(Value value) {
-  switch(value.type) {
-    case VAL_OBJ: return hashStringValue(value);
-    case VAL_NUMBER: return hashNumber(value);
-    case VAL_BOOL: return hashBoolean(value);
-    case VAL_NIL: return 0;
-  }
-}
+/* uint32_t hashValue(Value value) { */
+/*   switch(value.type) { */
+/*     case VAL_OBJ: return hashStringValue(value); */
+/*     case VAL_NUMBER: return hashNumber(value); */
+/*     case VAL_BOOL: return hashBoolean(value); */
+/*     case VAL_NIL: return 0; */
+/*   } */
+/* } */

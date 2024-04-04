@@ -11,6 +11,12 @@ static void freeObject(Obj* obj) {
       FREE_OBJ_STRING(str);
       break;
     }
+    case OBJ_FUNCTION: {
+      ObjFunction* func = (ObjFunction*)obj;
+      freeChunk(&func->chunk);
+      FREE(ObjFunction, func);
+      break;
+    }
   }
 }
 
