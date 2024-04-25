@@ -122,6 +122,10 @@ static bool callValue(Value callee, int argCount) {
   return false;
 }
 
+static bool checkClosure(Value value) {
+  return IS_OBJ(value) && IS_FUNCTION(value) && AS_FUNCTION(value)->closureState.count == 1;  
+}
+
 static InterpretResult run() {
   CallFrame* frame = &vm.frames[vm.frameCount - 1];
 
@@ -172,6 +176,12 @@ static InterpretResult run() {
                 pop();
                 return INTERPRET_OK;
               }
+              if (checkClosure(result)) {
+                for (int i = frame->slot; i < vm.stackSize; i++) {
+                  // kopioidaan pino closurelle käytettäväksi
+                  writeValueArray(&AS_FUNCTION(result)->closureState, vm.stack[i]);
+                }   
+              }  
               vm.stackSize = frame->slot;
               push(result);
               frame = &vm.frames[vm.frameCount - 1];

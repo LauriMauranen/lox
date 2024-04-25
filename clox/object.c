@@ -51,8 +51,17 @@ ObjFunction* newFunction() {
   ObjFunction* function = ALLOCATE_OBJ(ObjFunction, OBJ_FUNCTION);
   function->arity = 0;
   function->name = NULL;
+  initValueArray(&function->closureState);
   initChunk(&function->chunk);
   return function;
+}
+
+static void printFunction(ObjFunction* func) {
+  if (func->name == NULL) {
+    printf("<script>");
+  } else {
+    printf("<fn %s>", func->name->chars);
+  }
 }
 
 void printObject(Value value) {
@@ -60,19 +69,12 @@ void printObject(Value value) {
     case OBJ_STRING:
       printf("%s", AS_CSTRING(value));
       break;
-    case OBJ_FUNCTION: {
-      ObjFunction* func = AS_FUNCTION(value);
-      if (func->name == NULL) {
-        printf("<script>");
-      } else {
-        printf("<fn %s>", func->name->chars);
-      }
+    case OBJ_FUNCTION:
+      printFunction(AS_FUNCTION(value));
       break;
-    }
-    case OBJ_NATIVE: {
+    case OBJ_NATIVE:
       printf("<native fn>");
       break;
-    }
   }
 }
 

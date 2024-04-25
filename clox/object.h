@@ -40,6 +40,7 @@ typedef struct {
   int arity;
   Chunk chunk;
   ObjString* name;
+  ValueArray closureState;
 } ObjFunction;
 
 typedef Value (*NativeFn)(int argCount, Value* args);
@@ -55,6 +56,7 @@ ObjString* copyString(const char* chars, int length);
 void printObject(Value value);
 uint32_t hashString(const char* str, int length);
 ObjFunction* newFunction();
+/* ObjClosure* newClosure(); */
 ObjNative* newNative(NativeFn function);
 
 static inline bool isObjType(Value value, ObjType type) {

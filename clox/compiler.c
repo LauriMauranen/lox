@@ -341,6 +341,9 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
   compiler->breakJump = -1;
   compiler->inLoop = false;
   compiler->function = newFunction();
+
+  if (type == TYPE_CLOSURE) writeValueArray(&compiler->function->closureState, BOOL_VAL(true));
+
   current = compiler;
 
   if (type != TYPE_SCRIPT) {
@@ -671,9 +674,22 @@ static int resolveLocal(Compiler* compiler, Token* name) {
       return i;
     }
   }
-  if (compiler->enclosing == NULL
-    || compiler->enclosing->type == TYPE_SCRIPT) return -1;
-  return resolveLocal(compiler->enclosing, name);
+  return -1;
+}
+
+static int resolveClosure(Compiler* compiler, Token* name) {
+  int result = compiler->localCount - 1; // ehkä 
+  Compiler* enclosing = compiler->enclosing;
+  while (enclosing != NULL && enclosing->type != TYPE_SCRIPT) {
+    int arg = resolveLocal(enclosing, name);
+    if (arg == -1) {
+      result += enclosing->localCount - 1; // ehkä
+      enclosing = enclosing->enclosing;
+    } else {
+      return result + enclosing->localCount - arg; // ehkä
+    }
+  }
+  return -1;
 }
 
 static void namedVariable(Token name, bool canAssign) {
@@ -683,7 +699,15 @@ static void namedVariable(Token name, bool canAssign) {
   if (arg != -1) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
-  } else {
+  } else if (current->type == TYPE_CLOSURE) {
+    arg = resolveClosure(current, &name);
+    if (arg != -1) {
+      getOp = OP_GET_CLOSURE;
+      setOp = OP_SET_CLOSURE;
+    }
+  }
+
+  if (arg == -1) {
     arg = identifierConstant(&name);
     getOp = OP_GET_GLOBAL;
     setOp = OP_SET_GLOBAL;

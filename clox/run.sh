@@ -1,1 +1,1 @@
-make -B && ./clox $1
+make -B && ./clox.sh $1
