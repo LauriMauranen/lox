@@ -64,7 +64,7 @@ int disassembleInstruction(Chunk* chunk, int offset, int* previousLine) {
     uint8_t instruction = chunk->code[offset];
     switch(instruction) {
         case OP_RETURN:
-            return byteInstruction("OP_RETURN", chunk, offset);
+            return simpleInstruction("OP_RETURN", offset);
         case OP_CONSTANT:
             return constantInstruction("OP_CONSTANT", chunk, offset);
         case OP_PRINT:
@@ -81,6 +81,10 @@ int disassembleInstruction(Chunk* chunk, int offset, int* previousLine) {
           return byteInstruction("OP_GET_LOCAL", chunk, offset);
         case OP_SET_LOCAL:
           return byteInstruction("OP_SET_LOCAL", chunk, offset);
+        case OP_GET_CLOSURE:
+          return byteInstruction("OP_GET_CLOSURE", chunk, offset);
+        case OP_SET_CLOSURE:
+          return byteInstruction("OP_SET_CLOSURE", chunk, offset);
         case OP_JUMP:
           return jumpInstruction("OP_JUMP", 1, chunk, offset);
         case OP_JUMP_IF_FALSE:

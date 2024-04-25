@@ -9,5 +9,6 @@
 /* #define DEBUG_PRINT_CODE */
 #define UINT8_COUNT (UINT8_MAX + 1)
 #define FUNCTION_MAX_PARAMS 50
+#define MAX_FUNCTIONS 50
 
 #endif

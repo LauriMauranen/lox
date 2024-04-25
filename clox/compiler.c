@@ -54,10 +54,12 @@ typedef struct {
 
 typedef enum {
   TYPE_FUNCTION,
+  TYPE_CLOSURE,
   TYPE_SCRIPT,
 } FunctionType;
 
 typedef struct {
+  struct Compiler* enclosing;
   ObjFunction* function;
   FunctionType type;
 
@@ -70,20 +72,8 @@ typedef struct {
   bool inLoop;
 } Compiler;
 
-typedef struct {
-  Token name;
-  int idx;
-} FunctionPatch;
-
-typedef struct {
-  FunctionPatch* patches;
-  int count;
-  int capacity;
-} Patcher;
-
 Parser parser;
 Compiler* current = NULL;
-Patcher patcher;
 
 static void errorAt(Token* token, const char* message) {
   if (parser.panicMode) return;
@@ -179,8 +169,8 @@ static void emitBytes(uint8_t byte1, uint8_t byte2) {
   emitByte(byte2);
 }
 
-static void emitReturn(uint8_t nLocals) {
-  emitBytes(OP_RETURN, nLocals);
+static void emitReturn() {
+  emitBytes(OP_NIL, OP_RETURN);
 }
 
 static int emitJump(OpCode instruction) {
@@ -230,23 +220,9 @@ static bool identifiersEqual(Token* first, Token* second) {
     memcmp(first->start, second->start, first->length) == 0;
 }
 
-static void patchFunctionCalls() {
-  for (int i = 0; i < patcher.count; i++) {
-    FunctionPatch patch = patcher.patches[i];
-    for (int j = 0; j < current->localCount; j++) {
-      Local local = current->locals[j];
-      if (identifiersEqual(&patch.name, &local.name)) {
-        currentChunk()->code[patch.idx] = j;
-      }
-    }
-  }
-}
-
 static ObjFunction* endCompiler() {
-  emitByte(OP_NIL); // return value
-  emitReturn(0);
+  emitReturn();
 
-  patchFunctionCalls();
   FREE_ARRAY(Local, current->locals, current->localCapacity);
 
   ObjFunction* function = current->function;
@@ -256,6 +232,7 @@ static ObjFunction* endCompiler() {
   }
 #endif
 
+  current = current->enclosing;
   return function;
 }
 
@@ -267,6 +244,20 @@ static void whileStatement();
 static void forStatement();
 static ParseRule* getRule(TokenType type);
 /* static void parsePrecedence(Precedence precedence); */
+
+static void beginScope() {
+  current->scopeDepth++;
+}
+
+static void endScope() {
+  current->scopeDepth--;
+
+  while(current->localCount > 0 &&
+      current->locals[current->localCount - 1].depth > current->scopeDepth) {
+    emitByte(OP_POP);
+    current->localCount--;
+  }
+}
 
 static void parsePrecedence(Precedence precedence) {
   advance();
@@ -287,20 +278,6 @@ static void parsePrecedence(Precedence precedence) {
 
   if (canAssign && match(TOKEN_EQUAL)) {
     error("Invalid assignment target.");
-  }
-}
-
-static void beginScope() {
-  current->scopeDepth++;
-}
-
-static void endScope() {
-  current->scopeDepth--;
-
-  while(current->localCount > 0 &&
-      current->locals[current->localCount - 1].depth > current->scopeDepth) {
-    emitByte(OP_POP);
-    current->localCount--;
   }
 }
 
@@ -353,6 +330,7 @@ static void addLocal(Token name, bool init) {
 }
 
 static void initCompiler(Compiler* compiler, FunctionType type) {
+  compiler->enclosing = current;
   compiler->function = NULL;
   compiler->type = type;
 
@@ -365,14 +343,12 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
   compiler->function = newFunction();
   current = compiler;
 
+  if (type != TYPE_SCRIPT) {
+    current->function->name = copyString(parser.previous.start, parser.previous.length);
+  }
+
   Token tmpToken = {TOKEN_ERROR, "", 0, 0};
   addLocal(tmpToken, true);
-}
-
-static void initPatcher(Patcher* patcher) {
-  patcher->patches = NULL;
-  patcher->capacity = 0;
-  patcher->count = 0;
 }
 
 static void printStatement() {
@@ -508,17 +484,16 @@ static void breakStatement() {
 }
 
 static void returnStatement() {
-  if (current->function->name == NULL) {
-    error("Cannot return outside a function.");
+  if (current->type == TYPE_SCRIPT) {
+    error("Can't return from top-level code.");
   }
   if (match(TOKEN_SEMICOLON)) {
-    // return nil
-    emitByte(OP_NIL);
+    emitReturn();
   } else {
     expression();
     consume(TOKEN_SEMICOLON, "Expect ';' after return statement.");
+    emitByte(OP_RETURN);
   }
-  emitReturn(current->localCount - 1);
 }
 
 static void statement() {
@@ -573,6 +548,7 @@ static uint8_t parseVariable(const char* errorMessage) {
 }
 
 static void markInitialized() {
+  if (current->scopeDepth == 0) return;
   current->locals[current->localCount - 1].depth = current->scopeDepth;
 }
 
@@ -598,54 +574,38 @@ static void varDeclaration() {
   defineVariable(global);
 }
 
-static void setupArguments(Token params[], int arity) {
-  for (int i = 0; i < arity; i++) {
-    addLocal(params[i], false);
-    markInitialized();
+static void function(FunctionType type) {
+  Compiler compiler;
+  initCompiler(&compiler, type);
+  beginScope();
+
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
+
+  if (!check(TOKEN_RIGHT_PAREN)) {
+    do {
+      compiler.function->arity++;
+      if (compiler.function->arity > 255) {
+        errorAtCurrent("Function can have max 255 parameters.");
+      }
+
+      uint8_t constant = parseVariable("Expect parameter name.");
+      defineVariable(constant);
+    } while (match(TOKEN_COMMA));
   }
-  for (int i = 0; i < arity; i++) {
-    emitBytes(OP_SET_LOCAL, current->localCount - 1 - i);
-    emitByte(OP_POP);
-  }
+
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
+  consume(TOKEN_LEFT_BRACE, "Expect '{' after closing ')'.");
+
+  block();
+
+  ObjFunction* func = endCompiler();
+  emitConstant(OBJ_VAL(func));
 }
 
 static void funDeclaration() {
   uint8_t global = parseVariable("Missing function name.");
-
-  Token name = parser.previous;
-  consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
-
-  int arity = 0;
-  Token params[FUNCTION_MAX_PARAMS];
-
-  while (!(match(TOKEN_RIGHT_PAREN) || match(TOKEN_EOF))) {
-    consume(TOKEN_IDENTIFIER, "Expect function parameter.");
-    params[arity] = parser.previous;
-    arity += 1;
-    if (match(TOKEN_RIGHT_PAREN)) break;
-    consume(TOKEN_COMMA, "Expect ',' after function parameter.");
-  }
-
-  Compiler* previousCompiler = current;
-
-  Compiler functionCompiler;
-  initCompiler(&functionCompiler, TYPE_FUNCTION);
-
-  current->function->arity = arity;
-  ObjString* nameStr = copyString(name.start, parser.previous.length);
-  current->function->name = nameStr;
-
-  consume(TOKEN_LEFT_BRACE, "Expect '{,' after ')'.");
-
-  beginScope();
-  setupArguments(params, arity);
-  block();
-  endScope();
-
-  endCompiler();
-  current = previousCompiler;
-
-  emitConstant(OBJ_VAL(functionCompiler.function));
+  markInitialized();
+  function(current->type == TYPE_SCRIPT ? TYPE_FUNCTION: TYPE_CLOSURE);
   defineVariable(global);
 }
 
@@ -704,17 +664,16 @@ static void unary(bool canAssign) {
 static int resolveLocal(Compiler* compiler, Token* name) {
   for (int i = compiler->localCount - 1; i >= 0; i--) {
     Local local = compiler->locals[i];
-    /* printf("%.*s, ", local.name.length, local.name.start); */
     if (identifiersEqual(name, &local.name)) {
       if (local.depth == -1) {
         error("Cannot read local variable name in its own initializer.");
       }
-      /* printf("\n"); */
       return i;
     }
   }
-  /* printf("\n"); */
-  return -1;
+  if (compiler->enclosing == NULL
+    || compiler->enclosing->type == TYPE_SCRIPT) return -1;
+  return resolveLocal(compiler->enclosing, name);
 }
 
 static void namedVariable(Token name, bool canAssign) {
@@ -738,56 +697,27 @@ static void namedVariable(Token name, bool canAssign) {
   }
 }
 
-static void addFunctionPatch(Token name, int idx) {
-  if (patcher.capacity < patcher.count + 1) {
-    int oldCapacity = patcher.capacity;
-    patcher.capacity = GROW_CAPACITY(oldCapacity);
-    patcher.patches = GROW_ARRAY(FunctionPatch, patcher.patches,
-      oldCapacity, patcher.capacity);
+static uint8_t argumentList() {
+  int argCount = 0;
+  while(!check(TOKEN_RIGHT_PAREN)) {
+    if (argCount > 0) consume(TOKEN_COMMA, "Expect ',' after argument.");
+    expression();
+    if (argCount == 255) {
+      error("Can't have more than 255 arguments.");
+    }
+    argCount++;
   }
-  FunctionPatch* patch = &patcher.patches[patcher.count++];
-  patch->name = name;
-  patch->idx = idx;
-}
-
-static void namedFunction(Token name) {
-  uint8_t getOp;
-  int arg = resolveLocal(current, &name);
-
-  if (arg != -1) {
-    getOp = OP_GET_LOCAL;
-  } else {
-    arg = identifierConstant(&name);
-    getOp = OP_GET_GLOBAL;
-    // patch get operation if function is defined later in scope
-    addFunctionPatch(name, currentChunk()->count + 1);
-  }
-
-  emitBytes(getOp, arg);
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
+  return argCount;
 }
 
 static void call(bool canAssign) {
-  Token name = parser.previous;
-  advance(); // (
-
-  int nArgs = 0;
-  while (!(match(TOKEN_RIGHT_PAREN) || match(TOKEN_EOF))) {
-    expression();
-    nArgs++;
-    if (match(TOKEN_RIGHT_PAREN)) break;
-    consume(TOKEN_COMMA, "Expect ',' after function argument.");
-  }
-
-  namedFunction(name);
-  emitBytes(OP_CALL, nArgs);
+  uint8_t argCount = argumentList();
+  emitBytes(OP_CALL, argCount);
 }
 
 static void variable(bool canAssign) {
-  if (check(TOKEN_LEFT_PAREN)) {
-    call(false);
-  } else {
-    namedVariable(parser.previous, canAssign);
-  }
+  namedVariable(parser.previous, canAssign);
 }
 
 static void and_(bool canAssign) {
@@ -809,7 +739,7 @@ static void or_(bool canAssign) {
 }
 
 ParseRule rules[] = {
-  [TOKEN_LEFT_PAREN] = {grouping, NULL, PREC_NONE},
+  [TOKEN_LEFT_PAREN] = {grouping, call, PREC_CALL},
   [TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
   [TOKEN_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
   [TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
@@ -859,7 +789,6 @@ ObjFunction* compile(const char* source) {
   initScanner(source);
   Compiler compiler;
   initCompiler(&compiler, TYPE_SCRIPT);
-  initPatcher(&patcher);
 
   parser.hadError = false;
   parser.panicMode = false;
@@ -869,8 +798,6 @@ ObjFunction* compile(const char* source) {
   while (!match(TOKEN_EOF)) {
     declaration();
   }
-
-  FREE_ARRAY(FunctionPatch, patcher.patches, patcher.capacity);
 
   consume(TOKEN_EOF, "Expect end of expression.");
   ObjFunction* function = endCompiler();
