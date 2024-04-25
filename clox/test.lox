@@ -1,0 +1,45 @@
+fun kello() {
+	var aika = 0;
+	fun lisaaAika() {
+		aika = aika + 1;
+		print aika
+	}
+	fun vahennaAika() {
+		aika = aika - 1;
+		print aika;
+	}
+	fun tee(a) {
+		if (a) {
+			lisaaAika();
+		} else {
+			vahennaAika();
+		}
+	}
+	return tee
+}
+
+var tee = kello();
+tee(true); // 1
+tee(false); // 0
+
+fun toinen() {
+	var jee = "jee";
+	print "jaa";
+	fun ok() {
+		print jee;
+	}
+	return ok;
+}
+
+var ok = toinen();
+ok(); // jee
+
+fun kolmas() {
+	var jee = "jee";
+	fun ok() {
+		return jee;
+	}
+	print ok();
+}
+
+kolmas();

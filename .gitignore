@@ -1,5 +1,5 @@
 target
 testi.lox
-clox
+clox.sh
 *.swp
 *.swo
