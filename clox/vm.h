@@ -27,6 +27,9 @@ typedef struct {
   Table strings;
   Obj* objects;
   Table globals;
+
+  ValueArray* closureStates[MAX_CLOSURE_STATES];
+  int closureStateCount;
 } VM;
 
 typedef enum {

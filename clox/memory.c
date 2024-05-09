@@ -15,7 +15,6 @@ static void freeObject(Obj* obj) {
     case OBJ_FUNCTION: {
       ObjFunction* func = (ObjFunction*)obj;
       freeChunk(&func->chunk);
-      freeValueArray(&func->closureState);
       FREE(ObjFunction, func);
       break;
     }

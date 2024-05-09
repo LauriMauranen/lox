@@ -51,6 +51,15 @@ void printValue(Value value) {
   }
 }
 
+void printValueArray(ValueArray* array) {
+  printf("[");
+  for (int i = 0; i < array->count; i++) {
+    printValue(array->values[i]);
+    printf(", ");
+  }
+  printf("]\n");
+}
+
 /* static uint32_t hashStringValue(Value value) { */
 /*   ObjString* str = (ObjString*)AS_OBJ(value); */
 /*   return hashString(str->chars, str->length); */

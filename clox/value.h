@@ -42,6 +42,7 @@ typedef struct {
    Value* values;
 } ValueArray;
 
+void printValueArray(ValueArray* array);
 void initValueArray(ValueArray* array);
 void writeValueArray(ValueArray* array, Value value);
 void freeValueArray(ValueArray* array);

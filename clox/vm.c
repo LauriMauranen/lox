@@ -25,6 +25,13 @@ static void resetStack() {
   vm.frameCount = 0;
 }
 
+static void freeClosureStates() {
+  for (int i = 0; i < vm.closureStateCount; i++) {
+    freeValueArray(vm.closureStates[i]);
+  }
+  vm.closureStateCount = 0;
+}
+
 static void runtimeError(const char* format, ...) {
   va_list args;
   va_start(args, format);
@@ -91,8 +98,7 @@ static bool call(ObjFunction* function, int argCount) {
   CallFrame* newFrame = &vm.frames[vm.frameCount++];
   newFrame->function = function;
   newFrame->ip = function->chunk.code;
-  newFrame->slot = vm.stackSize - argCount - 1; // onko varma?
-  /* printf("slot: %d\n", newFrame->slot); */
+  newFrame->slot = vm.stackSize - argCount - 1;
 
   return true;
 }
@@ -122,8 +128,27 @@ static bool callValue(Value callee, int argCount) {
   return false;
 }
 
-static bool checkClosure(Value value) {
-  return IS_OBJ(value) && IS_FUNCTION(value) && AS_FUNCTION(value)->closureState.count == 1;  
+static bool handleClosures(CallFrame* frame) {
+  if (vm.closureStateCount == MAX_CLOSURE_STATES) {
+    runtimeError("Too many closures.");
+    return false;
+  }
+
+  ValueArray* state = (ValueArray*)reallocate(NULL, 0, sizeof(ValueArray));
+  initValueArray(state);
+  vm.closureStates[vm.closureStateCount++] = state;
+
+  for (int i = frame->slot; i < vm.stackSize; i++) {
+    writeValueArray(state, vm.stack[i]);
+  }
+
+  for (int i = 0; i < frame->function->closureCount; i++) {
+    frame->function->closures[i]->state = state;
+    /* printValueArray(frame->function->closures[i]->state); */
+    /* printf("%p\n", frame->function->closures[i]); */
+  }
+
+  return true;
 }
 
 static InterpretResult run() {
@@ -176,12 +201,11 @@ static InterpretResult run() {
                 pop();
                 return INTERPRET_OK;
               }
-              if (checkClosure(result)) {
-                for (int i = frame->slot; i < vm.stackSize; i++) {
-                  // kopioidaan pino closurelle käytettäväksi
-                  writeValueArray(&AS_FUNCTION(result)->closureState, vm.stack[i]);
-                }   
-              }  
+
+              if (IS_FUNCTION(result) && frame->function->closureCount) {
+                if (!handleClosures(frame)) return INTERPRET_RUNTIME_ERROR;
+              }
+
               vm.stackSize = frame->slot;
               push(result);
               frame = &vm.frames[vm.frameCount - 1];
@@ -234,12 +258,24 @@ static InterpretResult run() {
             }
             case OP_GET_CLOSURE: {
               uint8_t slot = READ_BYTE();
-              push(vm.stack[vm.stackSize - 1 - slot]);
+              ObjFunction* func = frame->function;
+              if (func->state == NULL) {
+                push(vm.stack[vm.stackSize - 1 - slot]);
+              } else {
+                int size = func->state->count;
+                push(func->state->values[size - 1 - slot]);
+              }
               break;
             }
             case OP_SET_CLOSURE: {
               uint8_t slot = READ_BYTE();
-              vm.stack[vm.stackSize - 1 - slot] = peek(0);
+              ObjFunction* func = frame->function;
+              if (func->state == NULL) {
+                vm.stack[vm.stackSize - 1 - slot] = peek(0);
+              } else {
+                int size = func->state->count;
+                func->state->values[size - 1 - slot] = peek(0);
+              }
               break;
             }
             case OP_JUMP_IF_FALSE: {
@@ -317,6 +353,8 @@ void initVM() {
   initTable(&vm.strings);
   initTable(&vm.globals);
 
+  vm.closureStateCount = 0;
+
   defineNative("clock", clockNative);
 }
 
@@ -325,6 +363,7 @@ void freeVM() {
   freeTable(&vm.strings);
   freeTable(&vm.globals);
   freeObjects();
+  freeClosureStates();
 }
 
 void push(Value value) {

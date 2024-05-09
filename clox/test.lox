@@ -1,16 +1,7 @@
-fun kolmas() {
-	var jee = "jee";
-	fun ok() {
-		return jee;
-	}
-	print ok();
-}
-
-kolmas(); // jee
-
 fun toinen() {
 	var jee = "jee";
 	fun ok() {
+		var okke = "okke";
 		print jee;
 	}
 	return ok;
@@ -42,4 +33,3 @@ fun kello() {
 var tee = kello();
 tee(true); // 1
 tee(false); // 0
-

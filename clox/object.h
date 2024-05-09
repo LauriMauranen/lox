@@ -35,13 +35,17 @@ struct ObjString {
   char chars[];
 };
 
-typedef struct {
+typedef struct ObjFunction ObjFunction;
+
+struct ObjFunction {
   Obj obj;
   int arity;
   Chunk chunk;
   ObjString* name;
-  ValueArray closureState;
-} ObjFunction;
+  ObjFunction* closures[MAX_CLOSURES];
+  int closureCount;
+  ValueArray* state; // eri kuin ylemmät!
+};
 
 typedef Value (*NativeFn)(int argCount, Value* args);
 

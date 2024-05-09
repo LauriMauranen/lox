@@ -342,7 +342,13 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
   compiler->inLoop = false;
   compiler->function = newFunction();
 
-  if (type == TYPE_CLOSURE) writeValueArray(&compiler->function->closureState, BOOL_VAL(true));
+  if (type == TYPE_CLOSURE) {
+    ObjFunction* func = current->function;
+    if (func->closureCount == MAX_CLOSURES) {
+      error("Too many closures in one function.");
+    }
+    func->closures[func->closureCount++] = compiler->function;
+  }
 
   current = compiler;
 
@@ -678,7 +684,7 @@ static int resolveLocal(Compiler* compiler, Token* name) {
 }
 
 static int resolveClosure(Compiler* compiler, Token* name) {
-  int result = compiler->localCount - 1; // ehkä 
+  int result = 0; // ehkä
   Compiler* enclosing = compiler->enclosing;
   while (enclosing != NULL && enclosing->type != TYPE_SCRIPT) {
     int arg = resolveLocal(enclosing, name);
@@ -686,7 +692,7 @@ static int resolveClosure(Compiler* compiler, Token* name) {
       result += enclosing->localCount - 1; // ehkä
       enclosing = enclosing->enclosing;
     } else {
-      return result + enclosing->localCount - arg; // ehkä
+      return result + enclosing->localCount - 1 - arg; // ehkä
     }
   }
   return -1;
