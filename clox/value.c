@@ -52,7 +52,7 @@ void printValue(Value value) {
 }
 
 void printValueArray(ValueArray* array) {
-  printf("[");
+  printf("[ ");
   for (int i = 0; i < array->count; i++) {
     printValue(array->values[i]);
     printf(", ");

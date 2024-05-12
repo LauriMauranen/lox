@@ -33,6 +33,13 @@ static int byteInstruction(const char* name, Chunk* chunk, int offset) {
   return offset + 2;
 }
 
+static int closureInstruction(const char* name, Chunk* chunk, int offset) {
+  uint8_t frames = chunk->code[offset + 1];
+  uint8_t slot = chunk->code[offset + 2];
+  printf("%-16s %4d %4d\n", name, frames, slot);
+  return offset + 3;
+}
+
 static int jumpInstruction(const char* name, int sign, Chunk* chunk, int offset) {
   uint16_t jump = chunk->code[offset + 1] << 8;
   jump |= chunk->code[offset + 2];
@@ -82,9 +89,9 @@ int disassembleInstruction(Chunk* chunk, int offset, int* previousLine) {
         case OP_SET_LOCAL:
           return byteInstruction("OP_SET_LOCAL", chunk, offset);
         case OP_GET_CLOSURE:
-          return byteInstruction("OP_GET_CLOSURE", chunk, offset);
+          return closureInstruction("OP_GET_CLOSURE", chunk, offset);
         case OP_SET_CLOSURE:
-          return byteInstruction("OP_SET_CLOSURE", chunk, offset);
+          return closureInstruction("OP_SET_CLOSURE", chunk, offset);
         case OP_JUMP:
           return jumpInstruction("OP_JUMP", 1, chunk, offset);
         case OP_JUMP_IF_FALSE:

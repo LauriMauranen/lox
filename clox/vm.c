@@ -138,14 +138,20 @@ static bool handleClosures(CallFrame* frame) {
   initValueArray(state);
   vm.closureStates[vm.closureStateCount++] = state;
 
+  if (frame->function->state != NULL) {
+    for (int i = 0; i < frame->function->state->count; i++) {
+      writeValueArray(state, frame->function->state->values[i]);
+    }
+  }
+
   for (int i = frame->slot; i < vm.stackSize; i++) {
     writeValueArray(state, vm.stack[i]);
   }
 
+  printValueArray(state);
+
   for (int i = 0; i < frame->function->closureCount; i++) {
     frame->function->closures[i]->state = state;
-    /* printValueArray(frame->function->closures[i]->state); */
-    /* printf("%p\n", frame->function->closures[i]); */
   }
 
   return true;
@@ -179,7 +185,6 @@ static InterpretResult run() {
 #endif
 
     for(;;) {
-
 #ifdef DEBUG_TRACE_EXECUTION
       printf("        ");
       for (int i = 0; i < vm.stackSize; i++) {
@@ -257,24 +262,29 @@ static InterpretResult run() {
               break;
             }
             case OP_GET_CLOSURE: {
+              uint8_t frames = READ_BYTE();
               uint8_t slot = READ_BYTE();
               ObjFunction* func = frame->function;
               if (func->state == NULL) {
-                push(vm.stack[vm.stackSize - 1 - slot]);
+                int frameSlot = vm.frames[vm.frameCount - 1 - frames].slot;
+                printf("Arvo: ");
+                printValue(vm.stack[frameSlot + slot]);
+                printf("\n");
+                push(vm.stack[frameSlot + slot]);
               } else {
-                int size = func->state->count;
-                push(func->state->values[size - 1 - slot]);
+                push(func->state->values[slot]);
               }
               break;
             }
             case OP_SET_CLOSURE: {
+              uint8_t frames = READ_BYTE();
               uint8_t slot = READ_BYTE();
               ObjFunction* func = frame->function;
               if (func->state == NULL) {
-                vm.stack[vm.stackSize - 1 - slot] = peek(0);
+                int frameSlot = vm.frames[vm.frameCount - 1 - frames].slot;
+                vm.stack[frameSlot + slot] = peek(0);
               } else {
-                int size = func->state->count;
-                func->state->values[size - 1 - slot] = peek(0);
+                func->state->values[slot] = peek(0);
               }
               break;
             }

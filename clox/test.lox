@@ -1,35 +1,18 @@
 fun toinen() {
 	var jee = "jee";
 	fun ok() {
-		var okke = "okke";
-		print jee;
+		var jaa = "jaa";
+		fun ok2() {
+			var okke = "okke";
+			print jee;
+		}
+		ok2();
+		return ok2;
 	}
+	ok();
 	return ok;
 }
 
 var ok = toinen();
-ok(); // jee
-
-fun kello() {
-	var aika = 0;
-	fun lisaaAika() {
-		aika = aika + 1;
-		print aika;
-	}
-	fun vahennaAika() {
-		aika = aika - 1;
-		print aika;
-	}
-	fun tee(a) {
-		if (a) {
-			lisaaAika();
-		} else {
-			vahennaAika();
-		}
-	}
-	return tee;
-}
-
-var tee = kello();
-tee(true); // 1
-tee(false); // 0
+var ok2 = ok();
+ok2(); // jee

@@ -683,19 +683,30 @@ static int resolveLocal(Compiler* compiler, Token* name) {
   return -1;
 }
 
-static int resolveClosure(Compiler* compiler, Token* name) {
-  int result = 0; // ehkä
+static bool resolveClosure(Compiler* compiler, Token* name, bool canAssign) {
+  int frames = 1;
   Compiler* enclosing = compiler->enclosing;
+
   while (enclosing != NULL && enclosing->type != TYPE_SCRIPT) {
     int arg = resolveLocal(enclosing, name);
     if (arg == -1) {
-      result += enclosing->localCount - 1; // ehkä
       enclosing = enclosing->enclosing;
-    } else {
-      return result + enclosing->localCount - 1 - arg; // ehkä
+      frames++;
+      continue;
     }
+
+    if (canAssign && match(TOKEN_EQUAL)) {
+      expression();
+      emitBytes(OP_SET_CLOSURE, frames);
+    } else {
+      emitBytes(OP_GET_CLOSURE, frames);
+    }
+    emitByte(arg);
+
+    return true;
   }
-  return -1;
+
+  return false;
 }
 
 static void namedVariable(Token name, bool canAssign) {
@@ -705,12 +716,8 @@ static void namedVariable(Token name, bool canAssign) {
   if (arg != -1) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
-  } else if (current->type == TYPE_CLOSURE) {
-    arg = resolveClosure(current, &name);
-    if (arg != -1) {
-      getOp = OP_GET_CLOSURE;
-      setOp = OP_SET_CLOSURE;
-    }
+  } else if (current->type == TYPE_CLOSURE && resolveClosure(current, &name, canAssign)) {
+    return;
   }
 
   if (arg == -1) {
