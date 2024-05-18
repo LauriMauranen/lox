@@ -9,7 +9,7 @@
 #define FRAMES_MAX 64
 
 typedef struct {
-  ObjFunction* function;
+  ObjClosure* closure;
   uint8_t* ip;
   int slot; // where frames stack starts
 } CallFrame;
@@ -18,18 +18,16 @@ typedef struct {
   CallFrame frames[FRAMES_MAX];
   int frameCount;
 
-  Chunk* chunk;
+  /* Chunk* chunk; */
   /* uint8_t* ip; */
+
   Value* stack;
   int stackSize;
   int stackCapasity;
-  /* Value* stackTop; */
+
   Table strings;
   Obj* objects;
   Table globals;
-
-  ValueArray* closureStates[MAX_CLOSURE_STATES];
-  int closureStateCount;
 } VM;
 
 typedef enum {

@@ -1,18 +1,18 @@
-fun toinen() {
-	var jee = "jee";
-	fun ok() {
-		var jaa = "jaa";
-		fun ok2() {
-			var okke = "okke";
-			print jee;
-		}
-		ok2();
-		return ok2;
+fun joo() {
+	var joo = "joo";
+	fun kerro() {
+		print joo;
 	}
-	ok();
-	return ok;
+	return kerro;
 }
 
-var ok = toinen();
-var ok2 = ok();
-ok2(); // jee
+var kerro = joo();
+
+fun toinen() {
+	var a = "a";
+	kerro();
+	var b = "b";
+	kerro();
+}
+
+toinen();
