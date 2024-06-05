@@ -620,7 +620,6 @@ static void function(FunctionType type) {
   consume(TOKEN_LEFT_BRACE, "Expect '{' after closing ')'.");
 
   block();
-  endScope();
 
   ObjFunction* func = endCompiler();
   emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(func)));
@@ -870,4 +869,12 @@ ObjFunction* compile(const char* source) {
   consume(TOKEN_EOF, "Expect end of expression.");
   ObjFunction* function = endCompiler();
   return parser.hadError ? NULL : function;
+}
+
+void markCompilerRoots() {
+  Compiler* compiler = current;
+  while (compiler != NULL) {
+    markObject((Obj*)compiler->function);
+    compiler = compiler->enclosing;
+  }
 }

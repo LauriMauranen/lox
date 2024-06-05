@@ -25,5 +25,9 @@
 void* reallocate(void* pointer, size_t oldSize, size_t newSize);
 void freeObjects();
 void freeTable(Table* table);
+void collectGarbage();
+void markValue(Value value);
+void markObject(Obj* object);
+void markTable(Table* table);
 
 #endif

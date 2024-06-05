@@ -1,18 +1,22 @@
 fun joo() {
 	var joo = "joo";
-	fun kerro() {
-		print joo;
+	fun kerro1() {
+		fun kerro2() {
+			print joo;
+		}
+		return kerro2;
 	}
-	return kerro;
+	return kerro1;
 }
 
-var kerro = joo();
+var kerro1 = joo();
+var kerro2 = kerro1();
 
 fun toinen() {
 	var a = "a";
-	kerro();
+	kerro1();
 	var b = "b";
-	kerro();
+	kerro2();
 }
 
 toinen();

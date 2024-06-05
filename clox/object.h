@@ -29,6 +29,7 @@ typedef enum {
 struct Obj {
   ObjType type;
   struct Obj* next;
+  bool isMarked;
 };
 
 struct ObjString {
@@ -39,10 +40,13 @@ struct ObjString {
   char chars[];
 };
 
-typedef struct {
+typedef struct ObjUpvalue ObjUpvalue;
+struct ObjUpvalue {
   Obj obj;
   Value* location;
-} ObjUpvalue;
+  ObjUpvalue* next;
+  Value closed;
+};
 
 typedef struct {
   Obj obj;
@@ -57,7 +61,6 @@ typedef struct {
   ObjFunction* function;
   ObjUpvalue** upvalues;
   int upvalueCount;
-  Value* closedUpvalues;
 } ObjClosure;
 
 typedef Value (*NativeFn)(int argCount, Value* args);

@@ -4,17 +4,9 @@
 #include "common.h"
 #include "value.h"
 
-typedef enum {
-  KEYTYPE_STRING,
-  KEYTYPE_INTEGER,
-  KEYTYPE_BOOLEAN,
-  KEYTYPE_NIL,
-} KeyType;
-
 typedef struct {
   Value value;
   ObjString* key;
-  /* Value* key; */
 } Entry;
 
 typedef struct {

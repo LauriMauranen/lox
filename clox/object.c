@@ -16,8 +16,15 @@
 static Obj* allocateObject(size_t size, ObjType type) {
   Obj* object = (Obj*)reallocate(NULL, 0, size);
   object->type = type;
+  object->isMarked = false;
+
   object->next = vm.objects;
   vm.objects = object;
+
+#ifdef DEBUG_LOG_GC
+  printf("%p allocate %zu for %d\n", object, size, type);
+#endif
+
   return object;
 }
 
@@ -66,7 +73,6 @@ ObjClosure* newClosure(ObjFunction* function) {
   closure->function = function;
   closure->upvalues = upvalues;
   closure->upvalueCount = function->upvalueCount;
-  closure->closedUpvalues = NULL; // varataan muisti tarvittaessa
 
   return closure;
 }
@@ -74,6 +80,8 @@ ObjClosure* newClosure(ObjFunction* function) {
 ObjUpvalue* newUpvalue(Value* slot) {
   ObjUpvalue* upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_UPVALUE);
   upvalue->location = slot;
+  upvalue->next = NULL;
+  upvalue->closed = NIL_VAL;
   return upvalue;
 }
 
