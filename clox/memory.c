@@ -72,6 +72,12 @@ static void markArray(ValueArray array) {
 }
 
 static void blackenObject(Obj* object) {
+#ifdef DEBUG_LOG_GC
+  printf("%p blacken ", object);
+  printValue(OBJ_VAL(object));
+  printf("\n");
+#endif
+
   switch (object->type) {
     case OBJ_STRING:
     case OBJ_NATIVE: break;
@@ -87,15 +93,11 @@ static void blackenObject(Obj* object) {
     }
     case OBJ_CLOSURE: {
       ObjClosure* closure = (ObjClosure*)object;
-      if (!closure->function->obj.isMarked) {
-        markObject(&closure->function->obj);
-      }
+      markObject((Obj*)closure->function);
       for (int i = 0; i < closure->upvalueCount; i++) {
-        ObjUpvalue* upvalue = closure->upvalues[i];
-        if (!upvalue->obj.isMarked) {
-          markObject(&upvalue->obj);
-        }
+        markObject((Obj*)closure->upvalues[i]);
       }
+      break;
     }
   }
 }
@@ -104,6 +106,25 @@ static void traceReferences() {
   while (vm.grayCount) {
     Obj* object = vm.grayStack[--vm.grayCount];
     blackenObject(object);
+  }
+}
+
+static void sweep() {
+  Obj* previous = NULL;
+  Obj* object = vm.objects;
+  while (object != NULL) {
+    if (object->isMarked) {
+      object->isMarked = false;
+      previous = object;
+      object = object->next;
+    } else {
+      Obj* next = object->next;
+      if (previous != NULL) {
+        previous->next = next;
+      }
+      freeObject(object);
+      object = next;
+    }
   }
 }
 
@@ -121,12 +142,14 @@ void markValue(Value value) {
 
 void markObject(Obj* object) {
   if (object == NULL) return;
+  if (object->isMarked) return;
+  object->isMarked = true;
+
 #ifdef DEBUG_LOG_GC
   printf("%p mark ", object);
   printValue(OBJ_VAL(object));
   printf("\n");
 #endif
-  object->isMarked = true;
 
   if (vm.grayCapacity < vm.grayCount + 1) {
     vm.grayCapacity = GROW_CAPACITY(vm.grayCapacity);
@@ -173,6 +196,8 @@ void collectGarbage() {
 
   markRoots();
   traceReferences();
+  tableRemoveWhite(&vm.strings);
+  sweep();
 
 #ifdef DEBUG_LOG_GC
   printf("-- gc end\n");
